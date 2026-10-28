@@ -24,13 +24,47 @@ def but_chi(img):
     return cv2.cvtColor(sketch, cv2.COLOR_GRAY2BGR)
 
 
+def _net_gach(shape, goc, seed, do_dai=15):
+    """Tạo vân nét gạch chéo như bút chì tô trên giấy."""
+    rng = np.random.default_rng(seed)
+    noise = rng.random(shape[:2]).astype(np.float32)
+    k = np.zeros((do_dai, do_dai), np.float32)
+    c = do_dai // 2
+    dx, dy = np.cos(np.radians(goc)), np.sin(np.radians(goc))
+    for t in np.linspace(-c, c, do_dai * 2):
+        k[int(round(c + t * dy)), int(round(c + t * dx))] = 1
+    k /= k.sum()
+    s = cv2.filter2D(noise, -1, k)
+    return cv2.normalize(s, None, 0, 1, cv2.NORM_MINMAX)
+
+
 def chi_mau(img):
-    """Bút chì màu: nhân nét chì với màu gốc đã làm dịu."""
+    """Bút chì màu: màu nhạt trên nền giấy trắng, tô bằng nét gạch chéo, viền chì đậm."""
+    h, w = img.shape[:2]
+    # màu phẳng, nhạt và hơi tươi như hộp chì màu
+    base = cv2.pyrMeanShiftFiltering(img, 10, 30)
+    hsv = cv2.cvtColor(base, cv2.COLOR_BGR2HSV).astype(np.float32)
+    hsv[..., 1] = np.clip(hsv[..., 1] * 1.7, 0, 255)
+    base = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR).astype(np.float32) / 255.0
+    base = 0.9 * base + 0.1  # chì màu không đậm như ảnh chụp
+    # mật độ tô: vùng tối tô dày, vùng sáng để lộ giấy trắng
+    tone = 1.0 - cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).astype(np.float32) / 255.0
+    dens = np.clip(0.12 + 0.75 * tone, 0, 0.85)
+    h1 = _net_gach((h, w), 35, 1, 25)
+    h2 = _net_gach((h, w), -55, 2, 25)
+    hatch = np.maximum((h1 > 1 - dens * 0.75).astype(np.float32),
+                       (h2 > 1.05 - dens * 0.6).astype(np.float32) * 0.8)
+    cover = hatch * 0.9
+    cover = cv2.GaussianBlur(cover, (3, 3), 0)
+    paper = np.full_like(base, 0.98)
+    out = paper * (1 - cover[..., None]) + base * cover[..., None]
+    # viền nét chì từ bản phác thảo
     sketch = cv2.cvtColor(but_chi(img), cv2.COLOR_BGR2GRAY).astype(np.float32) / 255.0
-    soft = cv2.bilateralFilter(img, 9, 60, 60).astype(np.float32)
-    soft = cv2.addWeighted(soft, 0.75, np.full_like(soft, 255), 0.25, 0)
-    out = soft * sketch[..., None]
-    return np.clip(out, 0, 255).astype(np.uint8)
+    out *= (0.35 + 0.65 * sketch)[..., None]
+    # vân giấy
+    rng = np.random.default_rng(5)
+    out += rng.normal(0, 0.02, (h, w, 1)).astype(np.float32)
+    return np.clip(out * 255, 0, 255).astype(np.uint8)
 
 
 def hoat_hinh(img, so_mau=9):

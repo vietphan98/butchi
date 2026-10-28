@@ -9,7 +9,7 @@
 | Kiểu | Lệnh | Cách làm |
 |---|---|---|
 | Bút chì | `but-chi` | Ảnh xám chia cho bản mờ của ảnh âm bản, thêm vân giấy |
-| Chì màu | `chi-mau` | Nét chì nhân với màu gốc đã làm dịu |
+| Chì màu | `chi-mau` | Màu phẳng tô bằng nét gạch chéo trên nền giấy trắng, viền chì |
 | Hoạt hình | `hoat-hinh` | Gom màu bằng k-means và viền đen |
 | Màu nước | `mau-nuoc` | Làm phẳng màu, loang mép, tăng độ tươi |
 

@@ -9,28 +9,36 @@ import numpy as np
 
 from .styles import KIEU, _resize_max
 
-# OpenCV không vẽ được dấu tiếng Việt, nên nhãn trên ảnh dùng chữ không dấu
-NHAN = {"goc": "ANH GOC", "but-chi": "BUT CHI", "chi-mau": "CHI MAU",
-        "hoat-hinh": "HOAT HINH", "mau-nuoc": "MAU NUOC"}
+FONT = os.path.join(os.path.dirname(__file__), "fonts", "BeVietnamPro-SemiBold.ttf")
+NHAN = {"goc": "Ảnh gốc", "but-chi": "Bút chì", "chi-mau": "Chì màu",
+        "hoat-hinh": "Hoạt hình", "mau-nuoc": "Màu nước"}
 
 
 def _nhan(img, text):
+    """Vẽ nhãn có dấu tiếng Việt (OpenCV không hỗ trợ nên dùng Pillow + font Be Vietnam Pro)."""
+    from PIL import Image, ImageDraw, ImageFont
     out = img.copy()
-    h = max(28, img.shape[0] // 14)
+    h = max(28, img.shape[0] // 12)
     cv2.rectangle(out, (0, 0), (out.shape[1], h), (0, 0, 0), -1)
-    cv2.putText(out, text, (12, int(h * 0.75)), cv2.FONT_HERSHEY_DUPLEX,
-                h / 40, (255, 255, 255), 2, cv2.LINE_AA)
-    return out
+    pil = Image.fromarray(cv2.cvtColor(out, cv2.COLOR_BGR2RGB))
+    font = ImageFont.truetype(FONT, int(h * 0.62))
+    ImageDraw.Draw(pil).text((max(10, h // 3), h // 2), text, font=font,
+                             fill=(255, 255, 255), anchor="lm")
+    return cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
 
 
 def ghep_luoi(tiles):
-    """Ghép các ảnh cùng kích thước thành lưới 2 cột (hoặc 3 nếu có 5-6 ảnh)."""
-    cols = 3 if len(tiles) > 4 else 2
-    h, w = tiles[0].shape[:2]
-    while len(tiles) % cols:
-        tiles.append(np.full((h, w, 3), 255, np.uint8))
-    rows = [np.hstack(tiles[i:i + cols]) for i in range(0, len(tiles), cols)]
-    return np.vstack(rows)
+    """Ghép ảnh cùng kích thước, không để ô trống.
+
+    5 ảnh: ảnh gốc to (gấp đôi) bên trái, 4 kiểu xếp 2x2 bên phải.
+    Số ảnh khác: xếp thành một hàng ngang.
+    """
+    if len(tiles) == 5:
+        h, w = tiles[0].shape[:2]
+        big = cv2.resize(tiles[0], (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)
+        right = np.vstack([np.hstack(tiles[1:3]), np.hstack(tiles[3:5])])
+        return np.hstack([big, right])
+    return np.hstack(tiles)
 
 
 def main(argv=None):
